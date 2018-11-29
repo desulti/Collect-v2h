@@ -25,8 +25,8 @@
 #include "lwip/err.h"
 #include "lwip/apps/sntp.h"
 
-#define WIFI_SSID      "NoOne" //"NCT"
-#define WIFI_PASSWORD  "tumotdentam" //"dccndccn"
+#define WIFI_SSID      "12345" //"NCT"
+#define WIFI_PASSWORD  "khang1995" //"dccndccn"
 
 #define MQTT_URI       "mqtt://iot.eclipse.org:1883"
 
@@ -431,13 +431,23 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event) {
 				// Su dung ding dang json de mo goi tin - Kiet
 				cJSON *root = cJSON_Parse(event->data);
 				cJSON *result = cJSON_GetObjectItem(root,"result");
+
+				 //CJSON_PUBLIC(cJSON_bool) cJSON_IsInvalid(const cJSON * const result);
+//				if (strcmp(cJSON_GetErrorPtr, "0") != 0) //(cJSON_IsInvalid(root))
+//					 printf("file not JSON!\n");
+				if (!cJSON_HasObjectItem(root, "result"))
+					printf("file not found result!\n");
 				//printf("Result: %s\n", result->valuestring);
-                if ((strcmp(result->valuestring, "PASS")) == 0) { //XAC THUC THANH CONG
+                else if ((strcmp(result->valuestring, "PASS")) == 0) { //XAC THUC THANH CONG
                     printf("AUTHENTICATION SUCCESS!\n");
-					char *time = cJSON_Print(cJSON_GetObjectItem(root,"cycle"));
                     isAuthenticated = true;
-                    time_sleep = atof(time);
-					key = cJSON_GetObjectItem(root,"key")->valueint;
+					if (!cJSON_IsInvalid(cJSON_GetObjectItem(root,"cycle")))
+					{
+						char *time = cJSON_Print(cJSON_GetObjectItem(root,"cycle"));
+                    	time_sleep = atof(time);
+					}
+					if (!cJSON_IsInvalid(cJSON_GetObjectItem(root,"key")))
+						key = cJSON_GetObjectItem(root,"key")->valueint;
 					//printf("Key: %d\n", key);
                     //Xac thuc thanh cong thi gui sensors data toi broker 
                     msg_id_published_collect = publish_sensor_data_to_broker(client);
