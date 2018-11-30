@@ -25,8 +25,8 @@
 #include "lwip/err.h"
 #include "lwip/apps/sntp.h"
 
-#define WIFI_SSID      "12345" //"NCT"
-#define WIFI_PASSWORD  "khang1995" //"dccndccn"
+#define WIFI_SSID      "NoOne" //"NCT"
+#define WIFI_PASSWORD  "tumotdentam" //"dccndccn"
 
 #define MQTT_URI       "mqtt://iot.eclipse.org:1883"
 
