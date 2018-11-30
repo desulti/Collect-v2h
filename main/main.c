@@ -84,6 +84,7 @@ static int msg_id_subscribed_authen_result = -1;
 static int msg_id_subscribed_command = -1;
 static int msg_id_published_authen = -1;
 static int msg_id_published_collect = -1;
+static bool isDataSent = false;
 
 static esp_mqtt_client_handle_t client;
 
@@ -197,7 +198,15 @@ Ham xu ly tac vu khoi dong lai may theo thoi gian
 void restart_task(){
 	for(;;)
 	{
-		
+		if (isAuthenticated)
+			if (isDataSent)
+			{
+				printf("Data had been sent, prepare to restart in %d ticks", (int)(ONE_MINIUTE * time_sleep)); 
+				vTaskDelay((int)(ONE_MINIUTE * time_sleep) / portTICK_PERIOD_MS);
+				esp_restart();
+			}
+		printf("Data hadn't been sent yet, check again after 2 second"); 
+		vTaskDelay(2000 / portTICK_PERIOD_MS);
 	}
 }
 /*
@@ -284,24 +293,24 @@ int publish_sensor_data_to_broker(esp_mqtt_client_handle_t client) {
     localtime_r(&now, &timeinfo);
     strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
 	cJSON_AddItemToObject(root, "timestamp", cJSON_CreateString(strftime_buf));
-	cJSON_AddItemToObject(root, "farm_id", cJSON_CreateString("<farm_id>"));
+	cJSON_AddNumberToObject(root, "farm_id", 	1);
 	cJSON_AddItemToObject(root, "device_id", cJSON_CreateString(DEVICE_ID));
 	cJSON_AddNumberToObject(root, "key",		key);
 	ESP_LOGI(TAG, "add items to object successful");
 	cJSON_AddItemToObject(root, "sensors_data", sensorsdata=cJSON_CreateArray());
 	ESP_LOGI(TAG, "add array to object successful");
 	sensordata_01 = cJSON_CreateObject();
-	cJSON_AddStringToObject(sensordata_01,"sensor_id",		"<sensor_id>");
+	cJSON_AddNumberToObject(sensordata_01,"sensor_id",		1);
 	cJSON_AddStringToObject(sensordata_01,"sensor_name",		"tempSensor??"); //Nho sua
 	cJSON_AddNumberToObject(sensordata_01,"sensor_value",		tempVal);
 	cJSON_AddItemToArray(sensorsdata, sensordata_01);
 	sensordata_02 = cJSON_CreateObject();
-	cJSON_AddStringToObject(sensordata_02,"sensor_id",		"<sensor_id>");
+	cJSON_AddNumberToObject(sensordata_02,"sensor_id",		2);
 	cJSON_AddStringToObject(sensordata_02,"sensor_name",		"humiSensor??"); //Nho sua
 	cJSON_AddNumberToObject(sensordata_02,"sensor_value",		humiVal);
 	cJSON_AddItemToArray(sensorsdata, sensordata_02);
 	sensordata_03 = cJSON_CreateObject();
-	cJSON_AddStringToObject(sensordata_03,"sensor_id",		"<sensor_id>");
+	cJSON_AddNumberToObject(sensordata_03,"sensor_id",		3);
 	cJSON_AddStringToObject(sensordata_03,"sensor_name",		"pHSensor??"); //Nho sua
 	cJSON_AddNumberToObject(sensordata_03,"sensor_value",		phVal);
 	cJSON_AddItemToArray(sensorsdata, sensordata_03);
@@ -407,8 +416,9 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event) {
                 ESP_LOGI(TAG, "sent publish sensors data successful, msg_id=%d", event->msg_id);
                 msg_id_published_collect = -1;
                 //Gui xong di ngu (deep sleep: Che do nay khi wake up se chay lai app_main())
-                printf("\nGO TO DEEP SLEEP in : %g minutes\n", time_sleep);
-				//vTaskDelay(ONE_MINIUTE * time_sleep / portTICK_PERIOD_MS);
+                //printf("\nGO TO DEEP SLEEP in : %g minutes\n", time_sleep);
+				printf("\nGO TO RESTART in : %g minutes\n", time_sleep);
+				isDataSent = true;
                 //esp_deep_sleep(ONE_MINIUTE * time_sleep);
             }
             break; 
@@ -472,15 +482,19 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event) {
                 else { //XAC THUC THANH CONG
                     printf("AUTHENTICATION SUCCESS!\n");
                     isAuthenticated = true;
-					if (!cJSON_IsInvalid(cJSON_GetObjectItem(root,"cycle")))
+					if (!cJSON_HasObjectItem(root,"cycle"))
+						printf("Cycle not found! Please check your server json format again!\n");
+					else
 					{
 						char *time = cJSON_Print(cJSON_GetObjectItem(root,"cycle"));
                     	time_sleep = atof(time);
 					}
-					if (!cJSON_IsInvalid(cJSON_GetObjectItem(root,"key")))
+					if (!cJSON_HasObjectItem(root,"key"))
+						printf("Key not found! Please check your server json format again!\n");
+					else
 					{
-						char *key_string = cJSON_Print(cJSON_GetObjectItem(root,"key"));
-						key = atof(key_string);
+						cJSON *key_Obj = cJSON_GetObjectItem(root,"key");
+						key = strtol(key_Obj->valuestring, NULL, 0);
 					}
 					//printf("Key: %d\n", key);
                     //Xac thuc thanh cong thi gui sensors data toi broker 
@@ -489,9 +503,19 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event) {
             }
             else if (is_topic_command(received_topic)) { //Thuc hien menh lenh neu topic la nct_command_id - Kiet
 				cJSON *root = cJSON_Parse(event->data);
-				cJSON *device_name = cJSON_GetObjectItem(root,"device_name");
-				cJSON *command = cJSON_GetObjectItem(root,"command");
-				change_device_state(device_name->valuestring, command->valuestring);
+				if (!cJSON_HasObjectItem(root, "device_name"))
+					printf("Device not found! Please check your server json format again!\n");
+				else
+				{
+					cJSON *device_name = cJSON_GetObjectItem(root,"device_name");
+					if (!cJSON_HasObjectItem(root, "command"))
+						printf("Command not found! Please check your server json format again!\n");
+					else
+					{
+						cJSON *command = cJSON_GetObjectItem(root,"command");
+						change_device_state(device_name->valuestring, command->valuestring);
+					}
+				}
 			}
 			break;
         }
@@ -672,7 +696,7 @@ void app_main(void) {
     ESP_LOGI(TAG, "[APP] Free memory: %d bytes", esp_get_free_heap_size());
     nvs_flash_init();
 	
-	esp_restart_reason_t reason = esp_reset_reason();
+	esp_reset_reason_t reason = esp_reset_reason();
 	if ((reason != ESP_RST_DEEPSLEEP) && (reason != ESP_RST_SW)) {
 		isAuthenticated = false;
 		time_sleep = 0;
@@ -685,6 +709,8 @@ void app_main(void) {
     setDHTgpio(TEMP_HUMI_SENSOR_PIN);
     //Tao task nhan du lieu tu cac sensors
     xTaskCreate(&read_sensors_data_task, "get_sensors_data_task", 2048, NULL, 5, NULL);
+	//Tao task tu dong khoi dong sau khi gui tin thanh cong
+	xTaskCreate(&restart_task, "do_restart_task", 2048, NULL, 5, NULL);
 	
 	/* gpio_config_t io_conf;
 	//config gpio_config_t
