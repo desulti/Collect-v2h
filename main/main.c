@@ -87,10 +87,15 @@ static int msg_id_published_collect = -1;
 
 static esp_mqtt_client_handle_t client;
 
-RTC_DATA_ATTR bool isAuthenticated = false;   //Bien luu trang thai esp32_collect da duoc xac thuc hay chua (luu ca khi deep sleep)
-RTC_DATA_ATTR float time_sleep = 0;           //Bien luu thoi gian ngu cua esp32_collect
-RTC_DATA_ATTR float published_sensors_data_count = 0;
-RTC_DATA_ATTR int key;
+//RTC_DATA_ATTR bool isAuthenticated = false;   //Bien luu trang thai esp32_collect da duoc xac thuc hay chua (luu ca khi deep sleep)
+RTC_NOINIT_ATTR bool isAuthenticated;   //Bien luu trang thai esp32_collect da duoc xac thuc hay chua (luu ca khi restart) - Kiet
+//RTC_DATA_ATTR float time_sleep = 0;           //Bien luu thoi gian ngu cua esp32_collect
+RTC_NOINIT_ATTR float time_sleep;           //Bien luu thoi gian restart cua esp32_collect
+//RTC_DATA_ATTR float published_sensors_data_count = 0;
+RTC_NOINIT_ATTR float published_sensors_data_count;
+//RTC_DATA_ATTR int key = 0;
+RTC_NOINIT_ATTR int key;
+
 static int count_authenticated_error = 0;     //Bien dem so lan xac thuc khong thanh cong
 
 static float phVal;
@@ -186,6 +191,15 @@ Ham xu ly tac vu cap nhat trang thai cac den va cac may bom
 		vTaskDelay(1000 / portTICK_PERIOD_MS);
 	}
 } */
+/*
+Ham xu ly tac vu khoi dong lai may theo thoi gian
+*/
+void restart_task(){
+	for(;;)
+	{
+		
+	}
+}
 /*
 Ham gui yeu cau xac thuc (nct_authentication) den mqtt broker 
 Tra ve msg_id cua published topic
@@ -394,6 +408,7 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event) {
                 msg_id_published_collect = -1;
                 //Gui xong di ngu (deep sleep: Che do nay khi wake up se chay lai app_main())
                 printf("\nGO TO DEEP SLEEP in : %g minutes\n", time_sleep);
+				//vTaskDelay(ONE_MINIUTE * time_sleep / portTICK_PERIOD_MS);
                 //esp_deep_sleep(ONE_MINIUTE * time_sleep);
             }
             break; 
@@ -432,26 +447,12 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event) {
 				cJSON *root = cJSON_Parse(event->data);
 				cJSON *result = cJSON_GetObjectItem(root,"result");
 
-				 //CJSON_PUBLIC(cJSON_bool) cJSON_IsInvalid(const cJSON * const result);
-//				if (strcmp(cJSON_GetErrorPtr, "0") != 0) //(cJSON_IsInvalid(root))
-//					 printf("file not JSON!\n");
-				if (!cJSON_HasObjectItem(root, "result"))
-					printf("file not found result!\n");
-				//printf("Result: %s\n", result->valuestring);
-                else if ((strcmp(result->valuestring, "PASS")) == 0) { //XAC THUC THANH CONG
-                    printf("AUTHENTICATION SUCCESS!\n");
-                    isAuthenticated = true;
-					if (!cJSON_IsInvalid(cJSON_GetObjectItem(root,"cycle")))
-					{
-						char *time = cJSON_Print(cJSON_GetObjectItem(root,"cycle"));
-                    	time_sleep = atof(time);
-					}
-					if (!cJSON_IsInvalid(cJSON_GetObjectItem(root,"key")))
-						key = cJSON_GetObjectItem(root,"key")->valueint;
-					//printf("Key: %d\n", key);
-                    //Xac thuc thanh cong thi gui sensors data toi broker 
-                    msg_id_published_collect = publish_sensor_data_to_broker(client);
-                } else { //XAC THUC THAT BAI
+				// Kiem tra goi tin co dung cu phap hay khong - Kiet
+				if ((!cJSON_HasObjectItem(root, "result"))
+					|| ((strcmp(result->valuestring, "PASS")) != 0)) {
+					if (!cJSON_HasObjectItem(root, "result"))
+						printf("Result not found! Please check your server json format again!\n");
+					//XAC THUC THAT BAI
                     printf("AUTHENTICATION FAILED!\n");
                     if (count_authenticated_error > MAXIMUM_RETRY_AUTHENTICATE) {
                         // TO_DO
@@ -466,6 +467,24 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event) {
                         printf("RE-AUTHENTICATION!\n");
                         msg_id_published_authen = publish_topic_authentication(client);
                     }
+				}
+				//printf("Result: %s\n", result->valuestring);
+                else { //XAC THUC THANH CONG
+                    printf("AUTHENTICATION SUCCESS!\n");
+                    isAuthenticated = true;
+					if (!cJSON_IsInvalid(cJSON_GetObjectItem(root,"cycle")))
+					{
+						char *time = cJSON_Print(cJSON_GetObjectItem(root,"cycle"));
+                    	time_sleep = atof(time);
+					}
+					if (!cJSON_IsInvalid(cJSON_GetObjectItem(root,"key")))
+					{
+						char *key_string = cJSON_Print(cJSON_GetObjectItem(root,"key"));
+						key = atof(key_string);
+					}
+					//printf("Key: %d\n", key);
+                    //Xac thuc thanh cong thi gui sensors data toi broker 
+                    msg_id_published_collect = publish_sensor_data_to_broker(client);
                 }
             }
             else if (is_topic_command(received_topic)) { //Thuc hien menh lenh neu topic la nct_command_id - Kiet
@@ -652,7 +671,14 @@ void app_main(void) {
     ESP_LOGI(TAG, "[APP] Startup...");
     ESP_LOGI(TAG, "[APP] Free memory: %d bytes", esp_get_free_heap_size());
     nvs_flash_init();
-
+	
+	esp_restart_reason_t reason = esp_reset_reason();
+	if ((reason != ESP_RST_DEEPSLEEP) && (reason != ESP_RST_SW)) {
+		isAuthenticated = false;
+		time_sleep = 0;
+		published_sensors_data_count = 0;
+		key = 0;
+	}
     adc1_config_width(ADC_WIDTH_10Bit);
     adc1_config_channel_atten(PH_SENSOR_PIN, ADC_ATTEN_DB_0);
 
