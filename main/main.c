@@ -53,8 +53,9 @@
 
 #define MAXIMUM_RETRY_AUTHENTICATE  2
 
-#define ONE_SECOND  1000000
-#define ONE_MINIUTE 1000000*60
+#define ONE_SECOND_SLEEP  1000000
+#define ONE_MINUTE_SLEEP 1000000*60
+#define ONE_MINUTE_DELAY 1000*60
 
 #define PH_SENSOR_PIN          (ADC1_CHANNEL_4) // read pH, GPIO32
 #define TEMP_HUMI_SENSOR_PIN   4                // read temp and humi
@@ -84,7 +85,7 @@ static int msg_id_subscribed_authen_result = -1;
 static int msg_id_subscribed_command = -1;
 static int msg_id_published_authen = -1;
 static int msg_id_published_collect = -1;
-static bool isDataSent = false;
+//static bool isDataSent = false;
 
 static esp_mqtt_client_handle_t client;
 
@@ -112,6 +113,7 @@ static void initialize_sntp(void);
 static time_t now;
 //Bien luu thoi gian hien tai - Kiet
 static void change_device_state(char* device_name, char* command);
+int publish_sensor_data_to_broker(esp_mqtt_client_handle_t client);
 
 /* static bool lamp_01_state = 0;
 static bool lamp_02_state = 0;
@@ -195,18 +197,12 @@ Ham xu ly tac vu cap nhat trang thai cac den va cac may bom
 /*
 Ham xu ly tac vu khoi dong lai may theo thoi gian
 */
-void restart_task(){
+void do_publish_sensor_data_task(){
 	for(;;)
 	{
-		if (isAuthenticated)
-			if (isDataSent)
-			{
-				printf("Data had been sent, prepare to restart in %d ticks", (int)(ONE_MINIUTE * time_sleep)); 
-				vTaskDelay((int)(ONE_MINIUTE * time_sleep) / portTICK_PERIOD_MS);
-				esp_restart();
-			}
-		printf("Data hadn't been sent yet, check again after 2 second"); 
-		vTaskDelay(2000 / portTICK_PERIOD_MS);
+		//printf("Task Stack High Water Mark: %d\n", uxTaskGetStackHighWaterMark(NULL));
+		msg_id_published_collect = publish_sensor_data_to_broker(client);
+		vTaskDelay(time_sleep * ONE_MINUTE_DELAY / portTICK_PERIOD_MS);
 	}
 }
 /*
@@ -417,9 +413,9 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event) {
                 msg_id_published_collect = -1;
                 //Gui xong di ngu (deep sleep: Che do nay khi wake up se chay lai app_main())
                 //printf("\nGO TO DEEP SLEEP in : %g minutes\n", time_sleep);
-				printf("\nGO TO RESTART in : %g minutes\n", time_sleep);
-				isDataSent = true;
-                //esp_deep_sleep(ONE_MINIUTE * time_sleep);
+				printf("\nPUBLISH AGAIN in : %g minutes\n", time_sleep);
+				//isDataSent = true;
+                //esp_deep_sleep(ONE_MINUTE_SLEEP * time_sleep);
             }
             break; 
         }
@@ -498,7 +494,8 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event) {
 					}
 					//printf("Key: %d\n", key);
                     //Xac thuc thanh cong thi gui sensors data toi broker 
-                    msg_id_published_collect = publish_sensor_data_to_broker(client);
+                    //msg_id_published_collect = publish_sensor_data_to_broker(client);
+					xTaskCreate(&do_publish_sensor_data_task, "do_publish_sensor_data_task", 2400, NULL, 5, NULL);
                 }
             }
             else if (is_topic_command(received_topic)) { //Thuc hien menh lenh neu topic la nct_command_id - Kiet
@@ -674,12 +671,12 @@ static void change_device_state(char* device_name, char* command)
 		ESP_LOGI(TAG, "No sub-device found!");
 		return;
 	} */
-	if (strcmp(command, "TURN ON") == 0)
+	if (strcmp(command, "TURN_ON") == 0)
 	{
 		//bat thiet bi neu no chua duoc bat, neu no da duoc bat roi thi khong lam gi
 		printf(NOTIFICATION, device_name, "on");
 	}
-	else if (strcmp(command, "TURN OFF") == 0)
+	else if (strcmp(command, "TURN_OFF") == 0)
 	{
 		//tat thiet bi no chua tat, neu no da tat roi thi khong lam gi
 		printf(NOTIFICATION, device_name, "off");
@@ -710,7 +707,7 @@ void app_main(void) {
     //Tao task nhan du lieu tu cac sensors
     xTaskCreate(&read_sensors_data_task, "get_sensors_data_task", 2048, NULL, 5, NULL);
 	//Tao task tu dong khoi dong sau khi gui tin thanh cong
-	xTaskCreate(&restart_task, "do_restart_task", 2048, NULL, 5, NULL);
+	//xTaskCreate(&restart_task, "do_restart_task", 2048, NULL, 5, NULL);
 	
 	/* gpio_config_t io_conf;
 	//config gpio_config_t
