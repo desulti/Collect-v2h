@@ -195,7 +195,7 @@ Ham xu ly tac vu cap nhat trang thai cac den va cac may bom
 	}
 } */
 /*
-Ham xu ly tac vu khoi dong lai may theo thoi gian
+Ham xu ly tac vu gui du lieu sau mot thoi gian nhat dinh - Kiet
 */
 void do_publish_sensor_data_task(){
 	for(;;)
