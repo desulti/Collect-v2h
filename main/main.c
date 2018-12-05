@@ -28,7 +28,7 @@
 #define WIFI_SSID      "NoOne" //"NCT"
 #define WIFI_PASSWORD  "tumotdentam" //"dccndccn"
 
-#define MQTT_URI       "mqtt://iot.eclipse.org:1883"
+#define MQTT_URI       "mqtt://test.mosquitto.org:1883"
 
 #define AUTHENTICATION    "{\"id\":%s,"\
                            "\"password\":\"nct_laboratory\","\
@@ -529,8 +529,8 @@ static esp_mqtt_client_handle_t mqtt_app_start(void) {
     const esp_mqtt_client_config_t mqtt_cfg = {
         .uri = MQTT_URI,
         .client_id = "esp32-collect",
-        .username = "user",
-        .password = "pass",
+       /*  .username = "user",
+        .password = "pass", */
         .lwt_topic = "/lwt",
         .lwt_msg = "offline",
         .lwt_qos = 0,
