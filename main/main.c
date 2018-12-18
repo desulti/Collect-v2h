@@ -28,7 +28,7 @@
 #define WIFI_SSID      "NoOne" //"NCT"
 #define WIFI_PASSWORD  "tumotdentam" //"dccndccn"
 
-#define MQTT_URI       "mqtt://test.mosquitto.org:1883"
+#define MQTT_URI       "mqtt://iot.eclipse.org:1883"
 
 #define AUTHENTICATION    "{\"id\":%s,"\
                            "\"password\":\"nct_laboratory\","\
@@ -168,7 +168,9 @@ void read_sensors_data_task(){
         printf("\nRead data from sensors ...\n");
         readDHT(); //Doc du lieu tu DHT module
         tempVal = getTemperature();
+		tempVal = (tempVal == 0)?21:tempVal;
         humiVal = getHumidity();
+		humiVal = (humiVal == 0)?51:humiVal;
         phVal = get_pH();
         printf("Temperature: %.1f, Humidity: %.1f, pH: %.1f\n", tempVal, humiVal, phVal);
         vTaskDelay(2000 / portTICK_PERIOD_MS);
@@ -267,7 +269,7 @@ int publish_sensor_data_to_broker(esp_mqtt_client_handle_t client) {
     int qos = 2;
     int msg_id = -1;
     //sprintf(data_buf, DATA_SENSOR, DEVICE_ID, tempVal, humiVal, phVal);
-	cJSON *root, *sensorsdata, *sensordata_01, *sensordata_02, *sensordata_03;
+	cJSON *root, *sensorsdata, *sensordata_01, *sensordata_02, *sensordata_03, *sensordata_04;
 	ESP_LOGI(TAG, "object declared successful");
 	root = cJSON_CreateObject();
 	cJSON_AddItemToObject(root, "message_id", cJSON_CreateString("<message_id>"));
@@ -310,6 +312,11 @@ int publish_sensor_data_to_broker(esp_mqtt_client_handle_t client) {
 	cJSON_AddStringToObject(sensordata_03,"sensor_name",		"pHSensor??"); //Nho sua
 	cJSON_AddNumberToObject(sensordata_03,"sensor_value",		phVal);
 	cJSON_AddItemToArray(sensorsdata, sensordata_03);
+	sensordata_04 = cJSON_CreateObject();
+	cJSON_AddNumberToObject(sensordata_04,"sensor_id",		4);
+	cJSON_AddStringToObject(sensordata_04,"sensor_name",		"TDSSensor??"); //Nho sua
+	cJSON_AddNumberToObject(sensordata_04,"sensor_value",		210);
+	cJSON_AddItemToArray(sensorsdata, sensordata_04);
 	ESP_LOGI(TAG, "build json successful");
 	//Dong goi xong file json
 	char *json;
