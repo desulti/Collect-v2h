@@ -28,7 +28,7 @@
 #define WIFI_SSID      "NoOne" //"NCT"
 #define WIFI_PASSWORD  "tumotdentam" //"dccndccn"
 
-#define MQTT_URI       "mqtt://iot.eclipse.org:1883"
+#define MQTT_URI       "mqtt://test.mosquitto.org:1883"
 
 #define AUTHENTICATION    "{\"id\":%s,"\
                            "\"password\":\"nct_laboratory\","\
@@ -102,8 +102,11 @@ static int count_authenticated_error = 0;     //Bien dem so lan xac thuc khong t
 
 static float phVal;
 static float tempVal;
+static float zeroTempVal = 0;
 static float humiVal;
-//static float tdsVal;
+static float zeroHumiVal = 0;
+static float tdsVal;
+static float zeroTDSVal = 0;
 
 //static void restart_wifi_and_mqtt_client(esp_mqtt_client_handle_t client);
 //Ham khoi lai wifi va mqtt client - Kiet
@@ -168,11 +171,12 @@ void read_sensors_data_task(){
         printf("\nRead data from sensors ...\n");
         readDHT(); //Doc du lieu tu DHT module
         tempVal = getTemperature();
-		tempVal = (tempVal == 0)?21:tempVal;
+		tempVal = (tempVal == 0)?zeroTempVal:tempVal;
         humiVal = getHumidity();
-		humiVal = (humiVal == 0)?51:humiVal;
+		humiVal = (humiVal == 0)?zeroHumiVal:humiVal;
         phVal = get_pH();
-        printf("Temperature: %.1f, Humidity: %.1f, pH: %.1f\n", tempVal, humiVal, phVal);
+		tdsVal = zeroTDSVal;
+        printf("Temperature: %.1f, Humidity: %.1f, pH: %.1f, TDS: %.1f\n", tempVal, humiVal, phVal, tdsVal);
         vTaskDelay(2000 / portTICK_PERIOD_MS);
     }
 }
@@ -315,7 +319,7 @@ int publish_sensor_data_to_broker(esp_mqtt_client_handle_t client) {
 	sensordata_04 = cJSON_CreateObject();
 	cJSON_AddNumberToObject(sensordata_04,"sensor_id",		4);
 	cJSON_AddStringToObject(sensordata_04,"sensor_name",		"TDSSensor??"); //Nho sua
-	cJSON_AddNumberToObject(sensordata_04,"sensor_value",		210);
+	cJSON_AddNumberToObject(sensordata_04,"sensor_value",		tdsVal);
 	cJSON_AddItemToArray(sensorsdata, sensordata_04);
 	ESP_LOGI(TAG, "build json successful");
 	//Dong goi xong file json
@@ -499,6 +503,21 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event) {
 						cJSON *key_Obj = cJSON_GetObjectItem(root,"key");
 						key = strtol(key_Obj->valuestring, NULL, 0);
 					}
+					if (cJSON_HasObjectItem(root,"zeroHumiVal"))
+					{
+						char *zeroHumiValStr = cJSON_Print(cJSON_GetObjectItem(root,"zeroHumiVal"));
+                    	zeroHumiVal = atof(zeroHumiValStr);
+					}
+					if (cJSON_HasObjectItem(root,"zeroTempVal"))
+					{
+						char *zeroTempValStr = cJSON_Print(cJSON_GetObjectItem(root,"zeroTempVal"));
+                    	zeroTempVal = atof(zeroTempValStr);
+					}
+					if (cJSON_HasObjectItem(root,"zeroTDSVal"))
+					{
+						char *zeroTDSValStr = cJSON_Print(cJSON_GetObjectItem(root,"zeroTDSVal"));
+                    	zeroTDSVal = atof(zeroTDSValStr);
+					}
 					//printf("Key: %d\n", key);
                     //Xac thuc thanh cong thi gui sensors data toi broker 
                     //msg_id_published_collect = publish_sensor_data_to_broker(client);
@@ -518,6 +537,21 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event) {
 					{
 						cJSON *command = cJSON_GetObjectItem(root,"command");
 						change_device_state(device_name->valuestring, command->valuestring);
+					}
+					if (cJSON_HasObjectItem(root,"zeroHumiVal"))
+					{
+						char *zeroHumiValStr = cJSON_Print(cJSON_GetObjectItem(root,"zeroHumiVal"));
+                    	zeroHumiVal = atof(zeroHumiValStr);
+					}
+					if (cJSON_HasObjectItem(root,"zeroTempVal"))
+					{
+						char *zeroTempValStr = cJSON_Print(cJSON_GetObjectItem(root,"zeroTempVal"));
+                    	zeroTempVal = atof(zeroTempValStr);
+					}
+					if (cJSON_HasObjectItem(root,"zeroTDSVal"))
+					{
+						char *zeroTDSValStr = cJSON_Print(cJSON_GetObjectItem(root,"zeroTDSVal"));
+                    	zeroTDSVal = atof(zeroTDSValStr);
 					}
 				}
 			}
