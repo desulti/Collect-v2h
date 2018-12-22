@@ -28,7 +28,8 @@
 #define WIFI_SSID      "NoOne" //"NCT"
 #define WIFI_PASSWORD  "tumotdentam" //"dccndccn"
 
-#define MQTT_URI       "mqtt://test.mosquitto.org:1883"
+#define MQTT_URI       "mqtt://iot.eclipse.org:1883"
+#define RESERVE_MQTT_URI	"mqtt://test.mosquitto.org:1883"	
 
 #define AUTHENTICATION    "{\"id\":%s,"\
                            "\"password\":\"nct_laboratory\","\
@@ -97,6 +98,7 @@ RTC_NOINIT_ATTR float time_sleep;           //Bien luu thoi gian restart cua esp
 RTC_NOINIT_ATTR float published_sensors_data_count;
 //RTC_DATA_ATTR int key = 0;
 RTC_NOINIT_ATTR int key;
+RTC_NOINIT_ATTR bool isMainServerDown; //Bien luu trang thai server chinh, neu server chinh khong connect duoc thi se ket noi voi server test.mosquitto.org
 
 static int count_authenticated_error = 0;     //Bien dem so lan xac thuc khong thanh cong
 
@@ -387,6 +389,7 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event) {
 
         case MQTT_EVENT_DISCONNECTED: {
             ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
+			isMainServerDown = !isMainServerDown;
 			esp_restart();
 			//Neu khong ket noi duoc voi mqtt server khoi dong lai wifi va mqtt client - Kiet
 			//restart_wifi_and_mqtt_client(client);
@@ -567,21 +570,42 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event) {
 }
 
 static esp_mqtt_client_handle_t mqtt_app_start(void) {
-    const esp_mqtt_client_config_t mqtt_cfg = {
-        .uri = MQTT_URI,
-        .client_id = "esp32-collect",
-       /*  .username = "user",
-        .password = "pass", */
-        .lwt_topic = "/lwt",
-        .lwt_msg = "offline",
-        .lwt_qos = 0,
-        .lwt_retain = 0,
-        .event_handle = mqtt_event_handler
-    };
+	if (!isMainServerDown)
+	{
+		const esp_mqtt_client_config_t mqtt_cfg = {
+			.uri = MQTT_URI,
+			.client_id = "esp32-collect",
+		   /*  .username = "user",
+			.password = "pass", */
+			.lwt_topic = "/lwt",
+			.lwt_msg = "offline",
+			.lwt_qos = 0,
+			.lwt_retain = 0,
+			.event_handle = mqtt_event_handler
+		};
 
-    esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
-    esp_mqtt_client_start(client);
-    return client;
+		esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
+		esp_mqtt_client_start(client);
+		return client;
+	}
+	else
+	{
+		const esp_mqtt_client_config_t mqtt_cfg = {
+			.uri = RESERVE_MQTT_URI,
+			.client_id = "esp32-collect",
+		   /*  .username = "user",
+			.password = "pass", */
+			.lwt_topic = "/lwt",
+			.lwt_msg = "offline",
+			.lwt_qos = 0,
+			.lwt_retain = 0,
+			.event_handle = mqtt_event_handler
+		};
+
+		esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
+		esp_mqtt_client_start(client);
+		return client;
+	}
 }
 
 static esp_err_t wifi_event_handler(void *ctx, system_event_t *event) {
@@ -740,6 +764,7 @@ void app_main(void) {
 		time_sleep = 0;
 		published_sensors_data_count = 0;
 		key = 0;
+		isMainServerDown = false;
 	}
     adc1_config_width(ADC_WIDTH_10Bit);
     adc1_config_channel_atten(PH_SENSOR_PIN, ADC_ATTEN_DB_0);
